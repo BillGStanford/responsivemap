@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>RedRoots - Cooperative Directory</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --red-primary: #dc2626;
+      --red-dark: #991b1b;
+      --gold: #f59e0b;
+      --dark-bg: #1f2937;
+      --darker-bg: #111827;
+      --gray-light: #6b7280;
+      --white: #ffffff;
+      --border: #374151;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--darker-bg);
+      color: var(--white);
+      overflow-x: hidden;
+    }
+
+    /* Map Container */
+    #map {
+      height: 100vh;
+      width: 100%;
+      position: relative;
+    }
+
+    /* Leaflet control styling */
+    .leaflet-control-zoom a {
+      background-color: var(--dark-bg) !important;
+      border: 1px solid var(--red-primary) !important;
+      color: var(--white) !important;
+    }
+
+    .leaflet-control-zoom a:hover {
+      background-color: var(--red-primary) !important;
+    }
+
+    /* Statistics Overlay */
+    .stats-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(31, 41, 55, 0.95);
+      backdrop-filter: blur(10px);
+      border: 2px solid var(--red-primary);
+      border-radius: 12px;
+      padding: 1rem;
+      z-index: 1000;
+      display: flex;
+      gap: 1.5rem;
+      box-shadow: 0 4px 20px rgba(220, 38, 38, 0.2);
+    }
+
+    .stat-item {
+      text-align: center;
+      min-width: 60px;
+    }
+
+    .stat-number {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--gold);
+      display: block;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--gray-light);
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    /* Search Bar */
+    .search-container {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+    }
+
+    .search-bar {
+      width: 280px;
+      padding: 12px 16px;
+      background: rgba(31, 41, 55, 0.95);
+      backdrop-filter: blur(10px);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      color: var(--white);
+      font-size: 0.9rem;
+      transition: border-color 0.2s ease;
+    }
+
+    .search-bar::placeholder {
+      color: var(--gray-light);
+    }
+
+    .search-bar:focus {
+      outline: none;
+      border-color: var(--red-primary);
+    }
+
+    /* Directory Panel */
+    .directory-panel {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      right: 20px;
+      max-height: 300px;
+      background: rgba(31, 41, 55, 0.95);
+      backdrop-filter: blur(10px);
+      border: 2px solid var(--red-primary);
+      border-radius: 12px;
+      overflow: hidden;
+      z-index: 1000;
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .directory-panel.open {
+      transform: translateY(0);
+    }
+
+    .panel-header {
+      background: linear-gradient(90deg, var(--red-primary), var(--red-dark));
+      padding: 1rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-toggle {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--red-primary);
+      color: var(--white);
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      z-index: 1100;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 15px rgba(220, 38, 38, 0.3);
+    }
+
+    .panel-toggle:hover {
+      background: var(--red-dark);
+      transform: translateX(-50%) translateY(-2px);
+    }
+
+    .business-list {
+      max-height: 200px;
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1px;
+      background: var(--border);
+    }
+
+    .business-item {
+      background: rgba(31, 41, 55, 0.8);
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .business-item:hover {
+      background: rgba(220, 38, 38, 0.1);
+    }
+
+    .business-image {
+      width: 50px;
+      height: 50px;
+      border-radius: 8px;
+      border: 2px solid var(--red-primary);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .business-info {
+      flex: 1;
+    }
+
+    .business-name {
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: var(--white);
+      margin-bottom: 0.2rem;
+    }
+
+    .business-type {
+      font-size: 0.8rem;
+      color: var(--gold);
+      font-weight: 500;
+      margin-bottom: 0.3rem;
+    }
+
+    .business-desc {
+      font-size: 0.8rem;
+      color: var(--gray-light);
+      line-height: 1.3;
+    }
+
+    /* Custom Popup Styling */
+    .leaflet-popup-content-wrapper {
+      background: var(--dark-bg) !important;
+      border: 2px solid var(--red-primary) !important;
+      border-radius: 12px !important;
+      box-shadow: 0 10px 30px rgba(220, 38, 38, 0.3) !important;
+    }
+
+    .leaflet-popup-content {
+      margin: 0 !important;
+      width: 300px !important;
+    }
+
+    .leaflet-popup-tip {
+      background: var(--dark-bg) !important;
+      border: 2px solid var(--red-primary) !important;
+    }
+
+    .leaflet-popup-close-button {
+      color: var(--white) !important;
+      font-size: 18px !important;
+    }
+
+    .custom-popup {
+      padding: 1.5rem;
+      color: var(--white);
+    }
+
+    .popup-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .popup-image {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      border: 2px solid var(--red-primary);
+      object-fit: cover;
+    }
+
+    .popup-title {
+      margin: 0 0 0.3rem 0;
+      font-size: 1.1rem;
+      color: var(--white);
+      font-weight: 600;
+    }
+
+    .popup-type {
+      font-size: 0.8rem;
+      color: var(--gold);
+      font-weight: 500;
+    }
+
+    .popup-desc {
+      margin: 1rem 0;
+      line-height: 1.4;
+      color: var(--gray-light);
+    }
+
+    .contact-info {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 1rem;
+      border-radius: 8px;
+      border-left: 3px solid var(--gold);
+      margin: 1rem 0;
+    }
+
+    .contact-info p {
+      margin: 0.5rem 0;
+      font-size: 0.9rem;
+    }
+
+    .popup-link {
+      color: var(--white);
+      background: var(--red-primary);
+      text-decoration: none;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 6px;
+      display: inline-block;
+      margin-top: 0.5rem;
+      transition: background-color 0.2s ease;
+    }
+
+    .popup-link:hover {
+      background: var(--red-dark);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .stats-overlay {
+        top: 10px;
+        left: 10px;
+        gap: 1rem;
+        padding: 0.8rem;
+      }
+      
+      .stat-number {
+        font-size: 1.2rem;
+      }
+      
+      .search-container {
+        top: 10px;
+        right: 10px;
+      }
+      
+      .search-bar {
+        width: 200px;
+      }
+      
+      .directory-panel {
+        bottom: 10px;
+        left: 10px;
+        right: 10px;
+        max-height: 250px;
+      }
+      
+      .panel-toggle {
+        bottom: 10px;
+      }
+      
+      .business-list {
+        grid-template-columns: 1fr;
+      }
+      
+      .business-item {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+      }
+      
+      .custom-popup {
+        padding: 1rem;
+      }
+      
+      .leaflet-popup-content {
+        width: 250px !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .stats-overlay {
+        gap: 0.8rem;
+        padding: 0.6rem;
+      }
+      
+      .stat-number {
+        font-size: 1rem;
+      }
+      
+      .search-bar {
+        width: 150px;
+        padding: 10px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="stats-overlay">
+    <div class="stat-item">
+      <span class="stat-number" id="coop-count">5</span>
+      <div class="stat-label">COOPS</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-number" id="worker-count">127</span>
+      <div class="stat-label">WORKERS</div>
+    </div>
+    <div class="stat-item">
+      <span class="stat-number" id="cities-count">1</span>
+      <div class="stat-label">CITIES</div>
+    </div>
+  </div>
+
+  <div class="search-container">
+    <input type="text" class="search-bar" placeholder="Search cooperatives..." id="search-input">
+  </div>
+
+  <button class="panel-toggle" id="panel-toggle">
+    View All Cooperatives
+  </button>
+
+  <div class="directory-panel" id="directory-panel">
+    <div class="panel-header">
+      <span>Local Cooperatives</span>
+      <span id="close-panel" style="cursor: pointer; font-size: 1.2rem;">✕</span>
+    </div>
+    <div class="business-list" id="business-list"></div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // Realistic cooperative data
+    const cooperatives = [
+      {
+        name: "Arizmendi Bakery",
+        type: "Worker-Owned Bakery",
+        description: "Community bakery with 25 worker-owners serving fresh bread and pastries daily.",
+        phone: "(415) 648-8596",
+        address: "1331 9th Ave, San Francisco, CA 94122",
+        website: "https://arizmendibakery.com",
+        workers: 25,
+        lat: 37.7649,
+        lng: -122.4664,
+        image: "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=200&h=200&fit=crop&crop=center"
+      },
+      {
+        name: "Rainbow Grocery",
+        type: "Worker-Owned Grocery",
+        description: "San Francisco's largest worker-owned cooperative grocery with 35 worker-owners.",
+        phone: "(415) 863-0620",
+        address: "1745 Folsom St, San Francisco, CA 94103",
+        website: "https://rainbow.coop",
+        workers: 35,
+        lat: 37.7679,
+        lng: -122.4147,
+        image: "https://images.unsplash.com/photo-1534723452862-4c874018d66d?w=200&h=200&fit=crop&crop=center"
+      },
+      {
+        name: "Heartfelt",
+        type: "Worker Cooperative",
+        description: "Home care cooperative with 22 worker-owners providing quality care services.",
+        phone: "(415) 551-1116",
+        address: "2001 Union St, San Francisco, CA 94123",
+        website: "https://heartfelt.coop",
+        workers: 22,
+        lat: 37.7956,
+        lng: -122.4340,
+        image: "https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=200&h=200&fit=crop&crop=center"
+      },
+      {
+        name: "Pedal Revolution",
+        type: "Bike Shop Cooperative",
+        description: "Community bike shop run by 18 worker-owners promoting sustainable transportation.",
+        phone: "(415) 550-8177",
+        address: "3085 21st St, San Francisco, CA 94110",
+        website: "https://pedalrevolution.org",
+        workers: 18,
+        lat: 37.7569,
+        lng: -122.4200,
+        image: "https://images.unsplash.com/photo-1558618047-3c8c76ca7d13?w=200&h=200&fit=crop&crop=center"
+      },
+      {
+        name: "Mission Pie",
+        type: "Worker-Owned Café",
+        description: "Community café with 27 worker-owners serving locally sourced food and supporting local causes.",
+        phone: "(415) 282-1500",
+        address: "2901 Mission St, San Francisco, CA 94110",
+        website: "https://missionpie.com",
+        workers: 27,
+        lat: 37.7513,
+        lng: -122.4187,
+        image: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=200&h=200&fit=crop&crop=center"
+      }
+    ];
+
+    // Calculate totals
+    const totalWorkers = cooperatives.reduce((sum, coop) => sum + coop.workers, 0);
+    document.getElementById('coop-count').textContent = cooperatives.length;
+    document.getElementById('worker-count').textContent = totalWorkers;
+
+    // Initialize map
+    const map = L.map("map", {
+      zoomControl: false
+    }).setView([37.7749, -122.4194], 13);
+
+    // Dark tile layer
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      subdomains: 'abcd',
+      maxZoom: 19
+    }).addTo(map);
+
+    // Add zoom control
+    L.control.zoom({
+      position: 'bottomright'
+    }).addTo(map);
+
+    const markers = [];
+
+    // Add markers
+    cooperatives.forEach((coop, index) => {
+      const popupContent = `
+        <div class="custom-popup">
+          <div class="popup-header">
+            <img src="${coop.image}" alt="${coop.name}" class="popup-image">
+            <div>
+              <h4 class="popup-title">${coop.name}</h4>
+              <div class="popup-type">${coop.type}</div>
+            </div>
+          </div>
+          <p class="popup-desc">${coop.description}</p>
+          <div class="contact-info">
+            <p><strong>📞</strong> ${coop.phone}</p>
+            <p><strong>📍</strong> ${coop.address}</p>
+            <p><strong>👥</strong> ${coop.workers} worker-owners</p>
+          </div>
+          <a href="${coop.website}" target="_blank" class="popup-link">Visit Website</a>
+        </div>
+      `;
+
+      const marker = L.marker([coop.lat, coop.lng]).addTo(map);
+      marker.bindPopup(popupContent);
+      markers.push(marker);
+    });
+
+    // Populate business list
+    const businessList = document.getElementById('business-list');
+    cooperatives.forEach((coop, i) => {
+      const div = document.createElement('div');
+      div.className = 'business-item';
+      div.innerHTML = `
+        <img src="${coop.image}" alt="${coop.name}" class="business-image">
+        <div class="business-info">
+          <div class="business-name">${coop.name}</div>
+          <div class="business-type">${coop.type}</div>
+          <div class="business-desc">${coop.workers} worker-owners</div>
+        </div>
+      `;
+      
+      div.addEventListener('click', () => {
+        map.setView([coop.lat, coop.lng], 16);
+        markers[i].openPopup();
+        document.getElementById('directory-panel').classList.remove('open');
+      });
+      
+      businessList.appendChild(div);
+    });
+
+    // Panel controls
+    const panelToggle = document.getElementById('panel-toggle');
+    const directoryPanel = document.getElementById('directory-panel');
+    const closePanel = document.getElementById('close-panel');
+
+    panelToggle.addEventListener('click', () => {
+      directoryPanel.classList.add('open');
+    });
+
+    closePanel.addEventListener('click', () => {
+      directoryPanel.classList.remove('open');
+    });
+
+    // Close panel when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!panelToggle.contains(e.target) && !directoryPanel.contains(e.target)) {
+        directoryPanel.classList.remove('open');
+      }
+    });
+
+    // Search functionality
+    const searchInput = document.getElementById('search-input');
+    searchInput.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase();
+      const businessItems = document.querySelectorAll('.business-item');
+      
+      businessItems.forEach((item, index) => {
+        const coop = cooperatives[index];
+        const matchesSearch = coop.name.toLowerCase().includes(searchTerm) ||
+                            coop.type.toLowerCase().includes(searchTerm) ||
+                            coop.description.toLowerCase().includes(searchTerm);
+        
+        item.style.display = matchesSearch ? 'flex' : 'none';
+        
+        if (matchesSearch) {
+          markers[index].addTo(map);
+        } else {
+          map.removeLayer(markers[index]);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
